@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <string.h>
-void printName(char name[])
+void printName(char name[]) 
 {
 int i;
 printf("%c. ", name[0]);
