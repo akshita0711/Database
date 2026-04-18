@@ -1,0 +1,497 @@
+
+#include<stdio.h>
+#include<string.h>
+
+struct user {
+    char fullname[100];
+    char username[100];
+    char password[100];
+};
+
+typedef struct user account;
+
+struct product {
+    char name[100];
+    int stock;
+    float price;
+};
+
+typedef struct product inventory_item;
+
+struct cart_item {
+    char product_name[100];
+    int quantity;
+    float unit_price;
+    float total_price;
+};
+
+typedef struct cart_item cart_product;
+
+struct transaction {
+    char username[100];
+    char product_name[100];
+    int quantity;
+    float total_price;
+};
+
+typedef struct transaction sale_record;
+
+// Global inventory array
+inventory_item store[5];
+int store_size = 5;
+
+// Global cart array and cart count
+cart_product shopping_cart[100];
+int cart_count = 0;
+
+// Current logged-in user
+char current_user[100] = "";
+
+// ============ FILE HANDLING FUNCTIONS ============
+
+void initialize_inventory_file() {
+    FILE *file = fopen("inventory.dat", "rb");
+    
+    if(file == NULL) {
+        file = fopen("inventory.dat", "wb");
+        
+        inventory_item initial_store[5] = {
+            {"Gaming Laptop", 15, 1299.99},
+            {"4K Monitor", 32, 399.99},
+            {"Mechanical Keyboard", 45, 149.99},
+            {"Wireless Mouse", 78, 49.99},
+            {"Noise-Cancelling Headphones", 28, 299.99}
+        };
+        
+        fwrite(initial_store, sizeof(inventory_item), 5, file);
+        fclose(file);
+        
+        printf("[INFO] Inventory file initialized.\n");
+    } else {
+        fclose(file);
+    }
+}
+
+void load_inventory() {
+    FILE *file = fopen("inventory.dat", "rb");
+    
+    if(file == NULL) {
+        printf("[ERROR] Cannot load inventory!\n");
+        return;
+    }
+    
+    fread(store, sizeof(inventory_item), 5, file);
+    fclose(file);
+}
+
+void save_inventory() {
+    FILE *file = fopen("inventory.dat", "wb");
+    
+    if(file == NULL) {
+        printf("[ERROR] Cannot save inventory!\n");
+        return;
+    }
+    
+    fwrite(store, sizeof(inventory_item), 5, file);
+    fclose(file);
+    
+    printf("[INFO] Inventory saved successfully.\n");
+}
+
+void save_transaction(char *username, char *product_name, int quantity, float total_price) {
+    FILE *file = fopen("transactions.dat", "ab");
+    
+    if(file == NULL) {
+        printf("[ERROR] Cannot save transaction!\n");
+        return;
+    }
+    
+    sale_record transaction;
+    strcpy(transaction.username, username);
+    strcpy(transaction.product_name, product_name);
+    transaction.quantity = quantity;
+    transaction.total_price = total_price;
+    
+    fwrite(&transaction, sizeof(sale_record), 1, file);
+    fclose(file);
+}
+
+void view_transaction_history(char *username) {
+    FILE *file = fopen("transactions.dat", "rb");
+    
+    if(file == NULL) {
+        printf("\n[INFO] No transaction history available.\n");
+        return;
+    }
+    
+    sale_record transaction;
+    printf("\n╔════════════════════════════════════════════════════════════╗\n");
+    printf("║         TRANSACTION HISTORY FOR %s\n", username);
+    printf("╚════════════════════════════════════════════════════════════╝\n");
+    printf("%-20s | %-30s | %-10s | %-15s\n", 
+           "Username", "Product", "Quantity", "Total($)");
+    printf("──────────────────────────────────────────────────────────────\n");
+    
+    int found = 0;
+    while(fread(&transaction, sizeof(sale_record), 1, file)) {
+        if(strcmp(transaction.username, username) == 0) {
+            printf("%-20s | %-30s | %-10d | $%-14.2f\n",
+                   transaction.username,
+                   transaction.product_name,
+                   transaction.quantity,
+                   transaction.total_price);
+            found = 1;
+        }
+    }
+    
+    if(!found) {
+        printf("[INFO] No transactions found for this user.\n");
+    }
+    
+    printf("══════════════════════════════════════════════════════════════\n");
+    fclose(file);
+}
+
+void view_all_transactions() {
+    FILE *file = fopen("transactions.dat", "rb");
+    
+    if(file == NULL) {
+        printf("\n[INFO] No transactions available.\n");
+        return;
+    }
+    
+    sale_record transaction;
+    printf("\n╔════════════════════════════════════════════════════════════╗\n");
+    printf("║                    ALL TRANSACTIONS                        ║\n");
+    printf("╚════════════════════════════════════════════════════════════╝\n");
+    printf("%-20s | %-30s | %-10s | %-15s\n", 
+           "Username", "Product", "Quantity", "Total($)");
+    printf("──────────────────────────────────────────────────────────────\n");
+    
+    while(fread(&transaction, sizeof(sale_record), 1, file)) {
+        printf("%-20s | %-30s | %-10d | $%-14.2f\n",
+               transaction.username,
+               transaction.product_name,
+               transaction.quantity,
+               transaction.total_price);
+    }
+    
+    printf("══════════════════════════════════════════════════════════════\n");
+    fclose(file);
+}
+
+// ============ USER MANAGEMENT FUNCTIONS ============
+
+void register_user() {
+    account new_user, existing_user;
+    FILE *file;
+
+    printf("\n=== USER REGISTRATION ===\n");
+    printf("Enter Full Name: ");
+    scanf(" %[^\n]", new_user.fullname);
+
+    printf("Create Username: ");
+    scanf("%s", new_user.username);
+
+    printf("Create Password: ");
+    scanf("%s", new_user.password);
+
+    file = fopen("accounts.dat", "rb");
+
+    if(file != NULL) {
+        while(fread(&existing_user, sizeof(existing_user), 1, file)) {
+            if(strcmp(new_user.username, existing_user.username) == 0) {
+                printf("\n[ERROR] Username already taken! Choose another.\n");
+                fclose(file);
+                return;
+            }
+        }
+        fclose(file);
+    }
+
+    file = fopen("accounts.dat", "ab");
+
+    if(file == NULL) {
+        printf("[ERROR] Cannot access file!\n");
+        return;
+    }
+
+    fwrite(&new_user, sizeof(account), 1, file);
+    fclose(file);
+
+    printf("\n[SUCCESS] Registration completed! You can now login.\n");
+}
+
+int authenticate_user() {
+    account user;
+    char input_username[100], input_password[100];
+    FILE *file;
+
+    file = fopen("accounts.dat", "rb");
+
+    if(file == NULL) {
+        printf("[ERROR] No registered users found.\n");
+        return 0;
+    }
+
+    printf("\n=== USER LOGIN ===\n");
+    printf("Enter Username: ");
+    scanf("%s", input_username);
+
+    printf("Enter Password: ");
+    scanf("%s", input_password);
+
+    while(fread(&user, sizeof(user), 1, file)) {
+        if(strcmp(input_username, user.username) == 0 && 
+           strcmp(input_password, user.password) == 0) {
+            printf("\n[SUCCESS] Welcome, %s!\n", user.fullname);
+            strcpy(current_user, user.username);
+            fclose(file);
+            return 1;
+        }
+    }
+
+    fclose(file);
+    printf("\n[ERROR] Invalid credentials!\n");
+    return 0;
+}
+
+// ============ INVENTORY MANAGEMENT FUNCTIONS ============
+
+void display_inventory() {
+    printf("\n========== ELECTRONICS STORE INVENTORY ==========\n");
+    printf("%-3s | %-30s | %-10s | %-10s\n", "ID", "Product Name", "Stock", "Price($)");
+    printf("--------------------------------------------------\n");
+
+    for(int i = 0; i < store_size; i++) {
+        printf("%-3d | %-30s | %-10d | $%-9.2f\n", 
+               i+1,
+               store[i].name, 
+               store[i].stock, 
+               store[i].price);
+    }
+    printf("==================================================\n");
+}
+
+void add_to_cart() {
+    int item_id, quantity;
+    char continue_shopping;
+
+    while(1) {
+        display_inventory();
+
+        printf("\nEnter Item ID (1-5) to add to cart (0 to checkout): ");
+        scanf("%d", &item_id);
+
+        if(item_id == 0) {
+            break;
+        }
+
+        if(item_id < 1 || item_id > 5) {
+            printf("[ERROR] Invalid Item ID! Please enter 1-5.\n");
+            continue;
+        }
+
+        printf("Enter Quantity: ");
+        scanf("%d", &quantity);
+
+        if(quantity <= 0) {
+            printf("[ERROR] Invalid quantity!\n");
+            continue;
+        }
+
+        if(quantity > store[item_id - 1].stock) {
+            printf("[ERROR] Only %d units available in stock!\n", store[item_id - 1].stock);
+            continue;
+        }
+
+        // Add item to cart
+        strcpy(shopping_cart[cart_count].product_name, store[item_id - 1].name);
+        shopping_cart[cart_count].quantity = quantity;
+        shopping_cart[cart_count].unit_price = store[item_id - 1].price;
+        shopping_cart[cart_count].total_price = quantity * store[item_id - 1].price;
+
+        // Update inventory
+        store[item_id - 1].stock -= quantity;
+
+        printf("\n[SUCCESS] %s x%d added to cart!\n", store[item_id - 1].name, quantity);
+
+        printf("\nContinue Shopping? (y/n): ");
+        scanf(" %c", &continue_shopping);
+
+        if(continue_shopping == 'n' || continue_shopping == 'N') {
+            break;
+        }
+    }
+}
+
+void display_cart() {
+    float grand_total = 0.0;
+
+    printf("\n╔════════════════════════════════════════════════════════════╗\n");
+    printf("║                      YOUR SHOPPING CART                    ║\n");
+    printf("╚════════════════════════════════════════════════════════════╝\n");
+
+    if(cart_count == 0) {
+        printf("\n[INFO] Your cart is empty!\n");
+        return;
+    }
+
+    printf("%-30s | %-10s | %-15s | %-15s\n", "Product", "Quantity", "Unit Price($)", "Total($)");
+    printf("----------------------------------------------------------------------\n");
+
+    for(int i = 0; i < cart_count; i++) {
+        printf("%-30s | %-10d | $%-14.2f | $%-14.2f\n",
+               shopping_cart[i].product_name,
+               shopping_cart[i].quantity,
+               shopping_cart[i].unit_price,
+               shopping_cart[i].total_price);
+        grand_total += shopping_cart[i].total_price;
+    }
+
+    printf("----------------------------------------------------------------------\n");
+    printf("%-30s | %-10s | %-15s | $%-14.2f\n", " ", " ", "GRAND TOTAL:", grand_total);
+    printf("══════════════════════════════════════════════════════════════\n\n");
+}
+
+void checkout() {
+    if(cart_count == 0) {
+        printf("\n[INFO] Your cart is empty! Nothing to checkout.\n");
+        return;
+    }
+
+    float grand_total = 0.0;
+    
+    printf("\n╔════════════════════════════════════════════════════════════╗\n");
+    printf("║                     CHECKOUT SUMMARY                       ║\n");
+    printf("╚════════════════════════════════════════════════════════════╝\n");
+
+    for(int i = 0; i < cart_count; i++) {
+        printf("%-30s | %-10d | $%-14.2f\n",
+               shopping_cart[i].product_name,
+               shopping_cart[i].quantity,
+               shopping_cart[i].total_price);
+        
+        // Save each transaction
+        save_transaction(current_user, shopping_cart[i].product_name, 
+                        shopping_cart[i].quantity, shopping_cart[i].total_price);
+        
+        grand_total += shopping_cart[i].total_price;
+    }
+
+    printf("──────────────────────────────────────────────────────────────\n");
+    printf("GRAND TOTAL: $%.2f\n", grand_total);
+    printf("══════════════════════════════════════════════════════════════\n\n");
+
+    // Save updated inventory to file
+    save_inventory();
+
+    // Reset cart
+    cart_count = 0;
+
+    printf("[SUCCESS] Order completed! Thank you for shopping.\n");
+}
+
+// ============ MENU FUNCTIONS ============
+
+void show_main_menu() {
+    printf("\n╔════════════════════════════════════════╗\n");
+    printf("║   INVENTORY MANAGEMENT SYSTEM          ║\n");
+    printf("╠════════════════════════════════════════╣\n");
+    printf("║  1. Register New Account               ║\n");
+    printf("║  2. Login to Account                   ║\n");
+    printf("║  3. View All Transactions (Admin)      ║\n");
+    printf("║  4. Exit                               ║\n");
+    printf("╚════════════════════════════════════════╝\n");
+    printf("Enter your choice (1-4): ");
+}
+
+void show_user_menu() {
+    printf("\n╔════════════════════════════════════════╗\n");
+    printf("║       USER MENU                       ║\n");
+    printf("╠════════════════════════════════════════╣\n");
+    printf("║  1. Shop & Add to Cart                 ║\n");
+    printf("║  2. View Shopping Cart                 ║\n");
+    printf("║  3. Checkout                           ║\n");
+    printf("║  4. View My Transactions               ║\n");
+    printf("║  5. Logout                             ║\n");
+    printf("╚════════════════════════════════════════╝\n");
+    printf("Enter your choice (1-5): ");
+}
+
+int main() {
+    int choice;
+
+    // Initialize inventory file if it doesn't exist
+    initialize_inventory_file();
+    load_inventory();
+
+    while(1) {
+        if(strlen(current_user) == 0) {
+            // Main menu (not logged in)
+            show_main_menu();
+            scanf("%d", &choice);
+
+            switch(choice) {
+                case 1:
+                    register_user();
+                    break;
+
+                case 2:
+                    if(authenticate_user()) {
+                        // User menu
+                        int user_choice;
+                        while(1) {
+                            show_user_menu();
+                            scanf("%d", &user_choice);
+
+                            switch(user_choice) {
+                                case 1:
+                                    load_inventory();
+                                    add_to_cart();
+                                    break;
+
+                                case 2:
+                                    display_cart();
+                                    break;
+
+                                case 3:
+                                    checkout();
+                                    break;
+
+                                case 4:
+                                    view_transaction_history(current_user);
+                                    break;
+
+                                case 5:
+                                    printf("\n[INFO] Logging out...\n");
+                                    strcpy(current_user, "");
+                                    break;
+
+                                default:
+                                    printf("\n[ERROR] Invalid choice! Please enter 1-5.\n");
+                            }
+
+                            if(strlen(current_user) == 0) {
+                                break;
+                            }
+                        }
+                    }
+                    break;
+
+                case 3:
+                    view_all_transactions();
+                    break;
+
+                case 4:
+                    printf("\nThank you for using the system. Goodbye!\n");
+                    return 0;
+
+                default:
+                    printf("\n[ERROR] Invalid choice! Please enter 1-4.\n");
+            }
+        }
+    }
+
+    return 0;
+}
